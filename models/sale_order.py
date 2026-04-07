@@ -6,20 +6,25 @@ class SalesOrder(models.Model):
     _inherit = 'sale.order'
 
     def create_project(self):
-        product = self.mapped('order_line.product_template_id')
-        self.env['project.task'].create({
-            'project_id': 5,
-            'partner_id': self.partner_id.id,
-            'name': self.name,
-            # 'invoice_date': fields.Date.today(),
-            # 'credit_date': cred_date,
-            'child_ids': [
-                Command.create({
-                    'name': product[0].name,
-                #     'quantity': 1,
-                #     'product_id': sub.product_id.id,
-                #     'price_unit': sub.recurring_amount
-                })
-            ],
+        for record in self:
+            sale_order_line = record.order_line.search([('id', '=', record.mapped('order_line'))])
+            unique_milestones = set(record.mapped('order_line.milestone'))
+            project = self.env['project.project'].create({
+                'name': record.name
+            })
 
-        })
+            for milestone in unique_milestones:
+                self.env['project.task'].create({
+                    'partner_id': record.partner_id.id,
+                    'project_id': project.id,
+                    'name': milestone,
+                })
+
+            task = project.task_ids
+            for task in task:
+                for order in sale_order_line:
+                    if int(task.name) == order.milestone:
+                        self.env['project.task'].create({
+                            'parent_id': task.id,
+                            'name': order.product_template_id.name,
+                        })
